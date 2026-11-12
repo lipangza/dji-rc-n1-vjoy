@@ -52,12 +52,18 @@ g++ -std=c++17 -O2 -static -o VJoy.exe VJoyPC.cpp -lws2_32 -luser32 -ladvapi32
 ### 运行
 
 ```powershell
-.\VJoy.exe                  # 默认：USB 直连，找不到就自动回退手机 UDP
-.\VJoy.exe --usb COM9       # 指定串口
+.\VJoy.exe                  # 默认：先试 COM9，不行再自动探测；都没有则回退手机 UDP
+.\VJoy.exe --usb COMx       # 指定串口
 .\VJoy.exe --scan           # 只看哪些串口、哪个是遥控器
 .\VJoy.exe --keys           # 按键探测模式
 .\VJoy.exe --udp            # 只用手机 UDP（端口 8456）
 ```
+
+**默认端口是 COM9。** 启动时先直接打开 COM9 探测，不逐个扫口——每扫一个口要等 0.6 秒，
+串口多的时候启动会明显变慢。串口号不是 COM9 也没关系，探测不通过会自动回退到全量扫描。
+
+**运行中掉线会自动重连。** 拔线、遥控器断电、USB 重新枚举导致串口号变了，程序都不会退出：
+每 2 秒重试一次，先试原来的端口，再全量重新枚举，重新拿到 `0x26` 轴帧后自动恢复输出。
 
 窗口保持开着，然后进游戏。运行日志写在 exe 同目录的 `vjoy.log`。
 

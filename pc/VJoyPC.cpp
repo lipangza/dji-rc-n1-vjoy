@@ -596,12 +596,21 @@ static int RunUsb(const std::string& portSpec, bool keysMode) {
     for (size_t i = 0; i < ports.size(); ++i) g_out << (i ? ", " : "") << ports[i];
     g_out << "\n";
 
-    if (!portSpec.empty()) {
-        if (sp.Open(portSpec, g_cfg.usb_baud)) {
-            opened = true;
-            g_out << "[串口] 使用指定端口 " << portSpec << "\n";
+    // 端口优先顺序：命令行指定 > 默认 COM9 > 全量探测
+    // COM9 是本机实测的遥控器端口；设成默认是为了启动时不用为每个口等 0.6 秒
+    std::string preferPort = portSpec.empty() ? std::string("COM9") : portSpec;
+    if (!preferPort.empty()) {
+        if (sp.Open(preferPort, g_cfg.usb_baud)) {
+            if (ProbeIsRemote(sp)) {
+                opened = true;
+                PurgeComm(sp.h, PURGE_RXCLEAR);
+                g_out << "[串口] 使用端口 " << preferPort << "（探测通过）\n";
+            } else {
+                sp.Close();
+                g_out << "[串口] " << preferPort << " 不是遥控器，改为自动探测\n";
+            }
         } else {
-            g_out << "[警告] 打开 " << portSpec << " 失败，改为自动探测\n";
+            g_out << "[串口] " << preferPort << " 打不开，改为自动探测\n";
         }
     }
     if (!opened) {
@@ -659,6 +668,35 @@ static int RunUsb(const std::string& portSpec, bool keysMode) {
         g_out << "先进游戏把杆推一遍看跟不跟手；不跟手就调 vjoy_usb.ini 的 sens。\n\n";
     }
 
+    // 断连后自动重连：先试当前端口，再全量重新枚举（USB 重插后串口号可能会变）
+    auto reconnect = [&]() -> bool {
+        std::string lastPort = sp.name;
+        sp.Close();
+        Sleep(400);   // 这个驱动关闭后立刻重开会被拒绝（GetLastError=5），必须缓一下
+
+        if (!lastPort.empty()) {
+            if (sp.Open(lastPort, g_cfg.usb_baud) && ProbeIsRemote(sp)) {
+                PurgeComm(sp.h, PURGE_RXCLEAR);
+                g_out << "[串口] 重连成功: " << lastPort << "\n";
+                return true;
+            }
+            sp.Close();
+        }
+
+        std::vector<std::string> ps = ListComPorts();
+        for (const std::string& p : ps) {
+            if (!sp.Open(p, g_cfg.usb_baud)) continue;
+            if (ProbeIsRemote(sp)) {
+                PurgeComm(sp.h, PURGE_RXCLEAR);
+                g_out << "[串口] 重连成功: " << p << "\n";
+                return true;
+            }
+            sp.Close();
+        }
+        g_out << "[串口] 重连失败（检查数据线 / 遥控器是否开机 / 有没有别的程序占着串口）\n";
+        return false;
+    };
+
     while (g_running) {
         auto now = std::chrono::steady_clock::now();
         double dt = std::chrono::duration<double>(now - tPrev).count();
@@ -677,14 +715,23 @@ static int RunUsb(const std::string& portSpec, bool keysMode) {
         }
 
         int n = sp.Read(tmp, (int)sizeof(tmp));
-        if (n < 0) {
-            g_out << "[警告] 串口读取出错，可能被拔掉了，退出。\n";
-            break;
-        }
+        if (n < 0) n = 0;   // 读失败（被拔掉 / 驱动掉线）当成没数据，统一走重连，不再直接退出
         if (n == 0) {
-            if (std::chrono::duration<double>(now - tNoData).count() > 3.0) {
-                g_out << "[警告] 3 秒没收到任何数据。遥控器还连着吗？\n";
-                tNoData = now;
+            if (std::chrono::duration<double>(now - tNoData).count() > 2.0) {
+                g_out << "[串口] 2 秒没有数据，尝试重连…\n";
+                if (reconnect()) {
+                    buf.clear();
+                    hasBtn = false;
+                    havePrevBtn = false;
+                    prevMask = 0xFFFFFFFF;
+                    tNoData = std::chrono::steady_clock::now();
+                    tPing   = tNoData;
+                    tPing2  = tNoData;
+                    continue;
+                }
+                Sleep(1000);
+                tNoData = std::chrono::steady_clock::now();
+                continue;
             }
             Sleep(1);
             continue;
