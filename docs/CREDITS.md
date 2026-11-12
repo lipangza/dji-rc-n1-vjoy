@@ -7,13 +7,18 @@
 
 ## 1. 串口协议知识
 
-### Timebutt/mDjiController
+### Matsemann/mDjiController
 
-- 仓库：https://github.com/Timebutt/mDjiController
-- 是什么：把 DJI 遥控器接到 PC 上当作模拟器手柄使用的项目（作者 Timebutt）
+- 仓库：https://github.com/Matsemann/mDjiController
+- 许可证：**Apache-2.0**
+- 是什么：把 DJI 遥控器接到 PC 上当作模拟器手柄使用的 C++ 项目，
+  是这一类项目的源头（2014 年创建，2024 年仍在更新）
 - 本仓库从它得到了什么：**「主动发 PING 才能打开数据流」这个关键认识**，以及
   `0x55 0x26` / `0x55 0x3A` 两类帧的存在与长度、SBUS 量纲（364~1684，中位 1024）
 - 说明：本项目**没有引用它的源码**，只使用了其中已经公开、且在本机独立复测通过的协议事实。
+
+> 备注：`Timebutt/mDjiController` 是本仓库的 fork（2017 年创建），不是源仓库。
+> 引用时请指向 `Matsemann/mDjiController`。
 
 ### MavicMiniControllerAsGamepad
 

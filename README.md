@@ -163,8 +163,8 @@ ctr=50,45,50,50
 
 简要说明：
 
-- 协议知识来自 **Timebutt/mDjiController**（[GitHub](https://github.com/Timebutt/mDjiController)）
-  等前人项目的实测结论，经本项目在本机独立复测后采用
+- 协议知识来自 **Matsemann/mDjiController**（[GitHub](https://github.com/Matsemann/mDjiController)，
+  Apache-2.0）等前人项目的实测结论，经本项目在本机独立复测后采用
 - 虚拟手柄能力来自 **vJoy** 项目，本项目只调用其公开 API，不分发其二进制
 - 用户提供的参考脚本 `dji_vjoy.py` 非本仓库原创，未收录，其两处结论已被本项目修正并实测验证
 
