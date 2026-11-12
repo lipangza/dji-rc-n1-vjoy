@@ -1,0 +1,35 @@
+# 构建产物
+VJoy.exe
+*.exe
+*.o
+*.obj
+
+# 运行期生成
+vjoy.log
+vjoy_usb.ini
+*.log
+
+# 安卓/Gradle
+.gradle/
+local.properties
+*.apk
+*.aab
+build/
+app/build/
+captures/
+.idea/
+*.iml
+*.keystore
+*.jks
+
+# 编辑器 / 系统
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/

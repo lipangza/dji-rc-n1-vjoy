@@ -1,0 +1,19 @@
+pluginManagement {
+    repositories {
+        maven { url 'https://maven.aliyun.com/repository/public/'}
+        maven { url 'https://maven.aliyun.com/repository/google/'}
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin/'}
+        maven { url 'https://maven.dji.com/release/'}
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        maven { url 'https://maven.aliyun.com/repository/public/'}
+        maven { url 'https://maven.aliyun.com/repository/google/'}
+        maven { url 'https://maven.dji.com/release/'}
+        maven { url 'https://s3.cn-north-1.amazonaws.com.cn/dji-maven/release/'}
+    }
+}
+rootProject.name = "dji_vjoy"
+include ':app'
