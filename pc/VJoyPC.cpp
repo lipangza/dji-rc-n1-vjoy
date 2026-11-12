@@ -697,6 +697,23 @@ static int RunUsb(const std::string& portSpec, bool keysMode) {
         return false;
     };
 
+    // 心跳保活：即使串口没数据、杆也不动，也按 60Hz 持续把状态喂给 vJoy。
+    // 断流几秒后游戏会把这个设备当成"没了"，之后即使数据恢复也不再认它——
+    // 这就是"重连成功但游戏没反应、必须重启程序"的原因。
+    JOYSTICK_POSITION_V2 lastSt{};
+    bool hasLastSt = false;
+    auto tUpdate = std::chrono::steady_clock::now();
+
+    // 心跳式等待：等待期间照常喂 vJoy，别留空档
+    auto heartbeatWait = [&](double sec) {
+        auto s = std::chrono::steady_clock::now();
+        while (g_running &&
+               std::chrono::duration<double>(std::chrono::steady_clock::now() - s).count() < sec) {
+            if (hasLastSt) g_vjoy.Update(VJOY_ID, &lastSt);
+            Sleep(16);
+        }
+    };
+
     while (g_running) {
         auto now = std::chrono::steady_clock::now();
         double dt = std::chrono::duration<double>(now - tPrev).count();
@@ -717,6 +734,11 @@ static int RunUsb(const std::string& portSpec, bool keysMode) {
         int n = sp.Read(tmp, (int)sizeof(tmp));
         if (n < 0) n = 0;   // 读失败（被拔掉 / 驱动掉线）当成没数据，统一走重连，不再直接退出
         if (n == 0) {
+            // 断流期间继续以 60Hz 喂 vJoy，保持设备"活着"
+            if (hasLastSt && std::chrono::duration<double>(now - tUpdate).count() >= 0.016) {
+                g_vjoy.Update(VJOY_ID, &lastSt);
+                tUpdate = now;
+            }
             if (std::chrono::duration<double>(now - tNoData).count() > 2.0) {
                 g_out << "[串口] 2 秒没有数据，尝试重连…\n";
                 if (reconnect()) {
@@ -724,12 +746,23 @@ static int RunUsb(const std::string& portSpec, bool keysMode) {
                     hasBtn = false;
                     havePrevBtn = false;
                     prevMask = 0xFFFFFFFF;
-                    tNoData = std::chrono::steady_clock::now();
-                    tPing   = tNoData;
-                    tPing2  = tNoData;
+                    // 断流期间游戏很可能已经把这个 vJoy 设备解绑了。
+                    // 重新 Relinquish + Acquire 一次，让设备状态刷新，游戏才会重新认它
+                    // （这正是"重启本程序就好"背后的机制）。
+                    g_vjoy.Relinq(VJOY_ID);
+                    Sleep(60);
+                    if (g_vjoy.Acquire(VJOY_ID)) {
+                        g_out << "[vJoy] 已重新接管设备 1\n";
+                    } else {
+                        g_out << "[vJoy] 重新接管设备 1 失败（可能被别的程序占着），继续尝试写入\n";
+                    }
+                    tUpdate = std::chrono::steady_clock::now();
+                    tNoData = tUpdate;
+                    tPing   = tUpdate;
+                    tPing2  = tUpdate;
                     continue;
                 }
-                Sleep(1000);
+                heartbeatWait(1.0);
                 tNoData = std::chrono::steady_clock::now();
                 continue;
             }
@@ -843,8 +876,12 @@ static int RunUsb(const std::string& portSpec, bool keysMode) {
         UINT buttons = st.Buttons;
         bool changed = (vx != prevAxis[0] || vy != prevAxis[1] || vz != prevAxis[2] ||
                         vrz != prevAxis[3] || vsl != prevAxis[4] || buttons != prevButtons);
-        if (changed) {
+        // 有变化立即写；没变化也按 60Hz 续写一次做心跳，别让游戏觉得设备停了
+        if (changed || std::chrono::duration<double>(now - tUpdate).count() >= 0.016) {
             g_vjoy.Update(VJOY_ID, &st);
+            lastSt = st;
+            hasLastSt = true;
+            tUpdate = now;
             prevAxis[0] = vx; prevAxis[1] = vy; prevAxis[2] = vz;
             prevAxis[3] = vrz; prevAxis[4] = vsl;
             prevButtons = buttons;
